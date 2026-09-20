@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-community
+langchain-huggingface
+langchain-chroma
+langchain-groq
+beautifulsoup4
+requests
+chromadb
