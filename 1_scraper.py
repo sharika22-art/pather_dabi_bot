@@ -1,60 +1,60 @@
 import requests
 from bs4 import BeautifulSoup
 import json
-import os
+import time
 
-BASE_URL = "https://bn.wikisource.org/wiki/পথের_দাবী_(শরৎচন্দ্র_চট্টোপাধ্যায়,_১৯৫৮)/"
-
-def to_bengali_numeral(n):
-    # Converts standard digits to Bengali digits (e.g., 12 -> ১২)
-    eng_to_bn = str.maketrans('0123456789', '০১২৩৪৫৬৭৮৯')
-    return str(n).translate(eng_to_bn)
-
-def crawl_book():
-    os.makedirs("data", exist_ok=True)
+def scrape_pather_dabi():
+    bengali_numerals = ["১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯", "১০", 
+                        "১১", "১২", "১৩", "১৪", "১৫", "১৬", "১৭", "১৮", "১৯", "২০", 
+                        "২১", "২২", "২৩", "২৪", "২৫", "২৬", "২৭", "২৮", "২৯", "৩০", "৩১"]
+    
+    base_url = "https://bn.wikisource.org/wiki/পথের_দাবী_(শরৎচন্দ্র_চট্টোপাধ্যায়,_১৯৫৮)/"
     book_data = []
-    
-    chapter_num = 1
-    print("Starting crawler...")
-    
-    while True:
-        bn_chapter = to_bengali_numeral(chapter_num)
-        url = BASE_URL + bn_chapter
-        
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Check if the page is empty or missing (Wikisource returns a 'noarticletext' div)
-        noarticletext = soup.find('div', class_='noarticletext')
-        if noarticletext or response.status_code == 404:
-            print(f"Finished crawling. Total chapters found: {chapter_num - 1}")
-            break
-            
-        # Extract main text body
-        content_div = soup.find('div', class_='mw-parser-output')
-        paragraphs = content_div.find_all('p') if content_div else []
-        
-        chapter_text = "\n".join([p.get_text(strip=True) for p in paragraphs])
-        
-        # Save if content exists
-        if chapter_text.strip():
-            book_data.append({
-                "book_name": "পথের দাবী (Pather Dabi)",
-                "chapter_name": bn_chapter,
-                "url": url,
-                "content": chapter_text
-            })
-            print(f"Scraped Chapter: {bn_chapter}")
-        
-        chapter_num += 1
-        
-        # Failsafe loop breaker
-        if chapter_num > 40:
-            break
 
-    with open("data/pather_dabi.json", "w", encoding="utf-8") as f:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    print("Starting book extraction from Wikisource...")
+    
+    for chapter in bengali_numerals:
+        url = base_url + chapter
+        print(f"Scraping Chapter: {chapter}...")
+        
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # CRITICAL FIX: Wikisource keeps the raw book text inside this specific div, not in <p> tags
+            text_container = soup.find('div', class_='prp-pages-output')
+            
+            # Fallback just in case
+            if not text_container:
+                text_container = soup.find('div', class_='mw-parser-output')
+            
+            if text_container:
+                # Extract all raw text and separate lines with a newline
+                chapter_text = text_container.get_text(separator='\n', strip=True)
+                
+                if chapter_text and len(chapter_text) > 100:
+                    book_data.append({
+                        "chapter": chapter,
+                        "text": chapter_text,
+                        "url": url
+                    })
+                    print(f" -> Success! ({len(chapter_text)} characters extracted)")
+                else:
+                    print(" -> Failed: No text found on page.")
+            
+            time.sleep(1)
+        else:
+            print(f" -> Failed to retrieve chapter {chapter} (Status Code: {response.status_code})")
+
+    with open("pather_dabi.json", "w", encoding="utf-8") as f:
         json.dump(book_data, f, ensure_ascii=False, indent=4)
-    print("Data successfully saved to data/pather_dabi.json")
+        
+    print(f"\nSuccessfully scraped {len(book_data)} chapters and saved to pather_dabi.json")
 
 if __name__ == "__main__":
-    crawl_book()
+    scrape_pather_dabi()
